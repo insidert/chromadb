@@ -1,63 +1,46 @@
 import chromadb
-import uuid
-import os
+from chromadb.utils import embedding_functions
+from chromadb.config import Settings
 from ollama import Client
 
 # -----------------------------
-# 1. Setup Ollama Client
+# OLLAMA
 # -----------------------------
 ollama = Client(host="http://localhost:11434")
 
 # -----------------------------
-# 2. Setup Chroma (local, persistent)
+# EMBEDDINGS (MUST MATCH chroma.py)
 # -----------------------------
-client = chromadb.Client()
-collection = client.get_or_create_collection(name="maarifaa")
+ollama_ef = embedding_functions.OllamaEmbeddingFunction(
+    model_name="nomic-embed-text",
+    url="http://localhost:11434"
+)
 
 # -----------------------------
-# 3. Ingest text files
+# CHROMA (MUST MATCH chroma.py)
 # -----------------------------
-files = ["maarifaa.txt", "about.txt", "policy.txt"]
-documents = []
-metadatas = []
-
-for fname in files:
-    if os.path.exists(fname):
-        with open(fname, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            if content:
-                # Split by blank lines
-                parts = [p.strip() for p in content.split("\n\n") if p.strip()]
-                for part in parts:
-                    documents.append(part)
-                    metadatas.append({"source": fname})
-    else:
-        print(f"Warning: {fname} not found, skipping")
-
-# Add documents only once
-if documents and collection.count() == 0:
-    collection.add(
-        ids=[str(uuid.uuid4()) for _ in documents],
-        documents=documents,
-        metadatas=metadatas
+client = chromadb.Client(
+    Settings(
+        persist_directory="chroma_db"
     )
-    print(f"Ingested {len(documents)} documents.")
-elif collection.count() > 0:
-    print("Documents already ingested. Skipping ingestion.")
-else:
-    print("No documents found to ingest.")
+)
+
+collection = client.get_or_create_collection(
+    name="maarifaa",
+    embedding_function=ollama_ef
+)
 
 # -----------------------------
-# 4. Questions
+# QUESTIONS
 # -----------------------------
 questions = [
-    # "What is maarifaa?",
-    "What is maarifaa vision?",
-    # "What is maarifaa policy?"
+    "What is Maarifaa?",
+    "What is Maarifaa vision?",
+    "What is Maarifaa policy?"
 ]
 
 # -----------------------------
-# 5. Query + LLM (One question at a time)
+# QUERY LOOP
 # -----------------------------
 for question in questions:
     results = collection.query(
@@ -66,24 +49,20 @@ for question in questions:
     )
 
     docs = results["documents"][0]
-    metas = results.get("metadatas", [[]])[0]
 
-    print("\n--------------------------------")
-    print(f"Question: {question}")
+    print("\n----------------------------")
+    print("Question:", question)
 
     if not docs:
         print("Answer: I dont have that information in the provided documents.")
         continue
 
-    # Build context safely
     context = "\n\n".join(docs)[:4000]
 
     prompt = f"""
-You are a customer support assistant.
 Answer ONLY using the context below.
-If the answer is not found, say:
+If not found, say:
 "I dont have that information in the provided documents."
-Do not add external knowledge.
 
 Context:
 {context}
@@ -95,25 +74,10 @@ Question:
     response = ollama.chat(
         model="llama3.1:8b",
         messages=[
-            {"role": "system", "content": "You are a strict, factual assistant."},
+            {"role": "system", "content": "You are a strict assistant."},
             {"role": "user", "content": prompt}
         ],
-        options={
-            "temperature": 0.2
-        }
+        options={"temperature": 0.2}
     )
 
-    answer = response["message"]["content"]
-    print(f"Answer: {answer}")
-
-    # Print sources
-    sources = set(
-        md.get("source", "unknown")
-        for md in metas
-        if isinstance(md, dict)
-    )
-
-    if sources:
-        print(f"Sources: {', '.join(sources)}")
-
-    print("--------------------------------")
+    print("Answer:", response["message"]["content"])
