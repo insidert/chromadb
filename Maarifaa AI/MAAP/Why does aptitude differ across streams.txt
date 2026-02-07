@@ -1,0 +1,3 @@
+Why does aptitude differ across streams?
+
+Different streams require different skill patterns.
