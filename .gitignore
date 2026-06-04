@@ -1,1 +1,7 @@
 .env
+__pycache__/
+*.pyc
+chroma_db/
+package-lock.json
+venv/
+*.code-workspace
