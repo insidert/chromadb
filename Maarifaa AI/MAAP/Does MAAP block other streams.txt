@@ -1,0 +1,3 @@
+Does MAAP block other streams?
+
+No. It highlights suitability, not eligibility.

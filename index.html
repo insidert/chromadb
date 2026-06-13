@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Maarifaa Assistant</title>
+
+<style>
+body {
+    font-family: Arial;
+}
+
+/* Floating button */
+#chat-toggle {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #f59e0b;
+    color: white;
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    font-size: 24px;
+}
+
+/* Chat container */
+#chatbox {
+    position: fixed;
+    bottom: 90px;
+    right: 20px;
+    width: 350px;
+    height: 500px;
+    background: #f5f5f5;
+    border-radius: 15px;
+    display: none;
+    flex-direction: column;
+    box-shadow: 0px 5px 20px rgba(0,0,0,0.2);
+}
+
+/* Header */
+#header {
+    background: #1e3cff;
+    color: white;
+    padding: 15px;
+    border-radius: 15px 15px 0 0;
+    display: flex;
+    justify-content: space-between;
+}
+
+/* Messages */
+#messages {
+    flex: 1;
+    padding: 10px;
+    overflow-y: auto;
+}
+
+/* Input */
+#input-area {
+    display: flex;
+    padding: 10px;
+}
+
+#input {
+    flex: 1;
+    padding: 10px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+}
+
+button {
+    margin-left: 5px;
+    background: #1e3cff;
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+
+/* Bubbles */
+.user {
+    background: #c7d2fe;
+    padding: 10px;
+    border-radius: 15px;
+    margin: 5px;
+    align-self: flex-end;
+    max-width: 70%;
+}
+
+.bot {
+    background: #e5e7eb;
+    padding: 10px;
+    border-radius: 15px;
+    margin: 5px;
+    max-width: 70%;
+}
+
+/* Suggestions */
+.suggestions {
+    margin-top: 10px;
+}
+
+.suggestions button {
+    background: white;
+    border: 1px solid #ccc;
+    margin: 5px 0;
+    width: 100%;
+    text-align: left;
+}
+</style>
+</head>
+
+<body>
+
+<div id="chat-toggle" onclick="toggleChat()">💬</div>
+
+<div id="chatbox">
+    <div id="header">
+        <span>Maarifaa Assistant</span>
+        <span onclick="toggleChat()" style="cursor:pointer;">✖</span>
+    </div>
+
+    <div id="messages"></div>
+
+    <div id="input-area">
+        <input id="input" placeholder="Type your question..."/>
+        <button onclick="sendMessage()">Send</button>
+    </div>
+</div>
+
+<script>
+function toggleChat() {
+    let box = document.getElementById("chatbox");
+    box.style.display = box.style.display === "flex" ? "none" : "flex";
+}
+
+/* Add message */
+function addMessage(text, type) {
+    let msg = document.createElement("div");
+    msg.className = type;
+    msg.innerText = text;
+    document.getElementById("messages").appendChild(msg);
+}
+
+/* Add bot response with FAQ + suggestions */
+function addBotResponse(answer, suggestions, question) {
+    let container = document.createElement("div");
+    container.className = "bot";
+
+    container.innerHTML = `
+        ${answer}
+        <br><br>
+        <b>Matched FAQ:</b> ${question}
+        <br><br>
+        <b>Related questions:</b>
+    `;
+
+    if (suggestions) {
+        let sugDiv = document.createElement("div");
+        sugDiv.className = "suggestions";
+
+        suggestions.forEach(q => {
+            let btn = document.createElement("button");
+            btn.innerText = q;
+            btn.onclick = () => sendMessage(q);
+            sugDiv.appendChild(btn);
+        });
+
+        container.appendChild(sugDiv);
+    }
+
+    document.getElementById("messages").appendChild(container);
+}
+
+/* Send message */
+async function sendMessage(custom=null) {
+    let input = document.getElementById("input");
+    let text = custom || input.value;
+
+    if (!text) return;
+
+    addMessage(text, "user");
+    input.value = "";
+
+    let res = await fetch("http://127.0.0.1:8000/chat", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({question: text})
+    });
+
+    let data = await res.json();
+
+    addBotResponse(
+        data.answer,
+        data.suggestions || ["Study in India", "Visa", "Scholarships"],
+        text
+    );
+}
+
+/* Enter key support */
+document.getElementById("input").addEventListener("keypress", function(e){
+    if(e.key === "Enter") sendMessage();
+});
+</script>
+
+</body>
+</html>

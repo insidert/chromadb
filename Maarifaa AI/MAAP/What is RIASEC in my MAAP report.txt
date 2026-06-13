@@ -1,0 +1,10 @@
+What is RIASEC in my MAAP report?
+
+RIASEC is a global interest model describing six personality interest types.
+
+Realistic
+Investigative
+Artistic
+Social
+Enterprising
+Conventional

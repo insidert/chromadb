@@ -1,0 +1,3 @@
+Does MAAP check eligibility?
+
+No. MAAP checks alignment, not admission eligibility.

@@ -1,53 +1,83 @@
-import chromadb
-import uuid
 import os
-# use local Chroma client (persistent DB stored by Chroma)
-client = chromadb.Client()
-collection = client.get_or_create_collection(name="maarifaa")
-# list of files to ingest
-files = ["maarifaa.txt", "about.txt", "policy.txt"]
-documents = []
-metadatas = []
-for fname in files:
-    if os.path.exists(fname):
-        with open(fname, "r", encoding="utf-8") as f:
-            content = f.read().strip()
-            if content:
-                # split into paragraphs by blank lines to create smaller passages
-                parts = [p.strip() for p in content.split("\n\n") if p.strip()]
-                for part in parts:
-                    documents.append(part)
-                    metadatas.append({"source": fname})
-    else:
-        print(f"Warning: {fname} not found, skipping")
+import uuid
+import chromadb
+from chromadb.utils import embedding_functions
 
-if not documents:
-    print("No documents found to ingest. Please add .txt files and retry.")
-else:
-    # Only add if the collection is empty. Re-run logic or deduplication can be added later.
-    if collection.count() == 0:
-        collection.add(
-            ids=[str(uuid.uuid4()) for _ in documents],
-            documents=documents,
-            metadatas=metadatas
-        )
-questions = [
-    "What is maarifaa?",
-    "what is maarifaa vision?",
-    "what is maarifaa policy?"
-]
-
-results = collection.query(
-    query_texts=questions,
-    n_results=5
+# ---------------- EMBEDDINGS ----------------
+ollama_ef = embedding_functions.OllamaEmbeddingFunction(
+    model_name="nomic-embed-text",
+    url="http://localhost:11434"
 )
 
-for i, docs in enumerate(results["documents"]):
-    print(f"\n Question {i+1}: {questions[i]}")
-    print("Relevant Information:")
-    for j, doc in enumerate(docs, start=1):
-        source = "unknown"
-        if results.get("metadatas") and len(results["metadatas"]) > i and len(results["metadatas"][i]) >= j:
-            md = results["metadatas"][i][j-1]
-            source = md.get("source", "unknown") if isinstance(md, dict) else str(md)
-        print(f"  {j}. {doc} (source: {source})")
+# ---------------- DB PATH ----------------
+DB_PATH = os.path.abspath("./chroma_db")
+
+client = chromadb.PersistentClient(path=DB_PATH)
+
+COLLECTION_NAME = "maarifaa"
+
+# ---------------- RESET COLLECTION ----------------
+try:
+    client.delete_collection(COLLECTION_NAME)
+    print("🗑️ Old collection deleted")
+except:
+    pass
+
+collection = client.get_or_create_collection(
+    name=COLLECTION_NAME,
+    embedding_function=ollama_ef
+)
+
+documents, metadatas, ids = [], [], []
+seen = set()
+
+# ---------------- CHUNKING ----------------
+def add_text_chunks(text, source):
+    chunk_size = 300
+    overlap = 50
+    step = chunk_size - overlap
+
+    for i in range(0, len(text), step):
+        chunk = text[i:i + chunk_size].strip()
+
+        if not chunk or chunk in seen:
+            continue
+
+        seen.add(chunk)
+
+        documents.append(chunk)
+        ids.append(str(uuid.uuid4()))
+        metadatas.append({"source": source})
+
+# ---------------- LOAD FILES ----------------
+folder = "Maarifaa AI"
+
+file_count = 0
+
+for root, _, files in os.walk(folder):
+    for f in files:
+        if f.endswith(".txt"):
+            path = os.path.join(root, f)
+            file_count += 1
+
+            try:
+                with open(path, "r", encoding="utf-8") as file:
+                    add_text_chunks(file.read(), path)
+            except Exception as e:
+                print("❌ Error:", e)
+
+# ---------------- INSERT ----------------
+batch_size = 20
+
+for i in range(0, len(documents), batch_size):
+    collection.add(
+        ids=ids[i:i+batch_size],
+        documents=documents[i:i+batch_size],
+        metadatas=metadatas[i:i+batch_size]
+    )
+
+    print(f"✅ Batch {i//batch_size + 1}")
+
+print("\n📂 Files:", file_count)
+print("📄 Chunks:", len(documents))
+print("🧠 DB size:", collection.count())

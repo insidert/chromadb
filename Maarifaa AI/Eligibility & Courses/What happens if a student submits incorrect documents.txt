@@ -1,0 +1,2 @@
+What happens if a student submits incorrect documents?
+The application may be rejected or delayed until correct documents are provided.
